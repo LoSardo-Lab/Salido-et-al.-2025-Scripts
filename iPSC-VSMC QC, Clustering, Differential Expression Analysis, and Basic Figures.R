@@ -73,7 +73,7 @@ DimPlot(myData , pt.size = 1.6, reduction = "umap", group.by = 'seurat_clusters'
                  "firebrick2","honeydew3","burlywood3","azure4","cornsilk2","lightpink","lightcyan1"))
 
 #Plot the UMAP colored by genotype
-DimPlot(mySCT, pt.size = 1.6, reduction = "umap", group.by = 'genotype',
+DimPlot(myData, pt.size = 1.6, reduction = "umap", group.by = 'genotype',
         cols = c("firebrick","gold2","turquoise4","darkolivegreen3"))
 
 #Differential expression analysis between all clusters
