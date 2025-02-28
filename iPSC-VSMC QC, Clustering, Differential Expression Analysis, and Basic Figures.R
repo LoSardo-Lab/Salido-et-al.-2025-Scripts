@@ -1,5 +1,4 @@
 #this code was adapted from the Seurat vignette on single-cell data analysis, publicly available here:https://satijalab.org/seurat/articles/pbmc3k_tutorial
-#and from 
 
 #load packages
 library(Seurat)
