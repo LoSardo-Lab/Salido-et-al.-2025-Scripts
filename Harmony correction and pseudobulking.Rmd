@@ -1,0 +1,297 @@
+```{r}
+library(tidyverse)
+library(Seurat)
+library(scRNAtoolVis)
+library(patchwork)
+#options(future.globals.maxSize= 2097152000)
+library(ggeasy)
+```
+
+```{r}
+obj = readRDS("./data/wiscSCTdat.rds")
+#obj = UpdateSeuratObject(obj)
+
+clusterCornerAxes(object = obj, clusterCol = "orig.ident", aspect.ratio = 1, pSize = 0.5)
+```
+```{r}
+colors = c("#F56821", "#EBC42D", "#AFED66", "#5C822C", "#67FFCF", 
+           "#00B5FA", "#0500C2", "#966CE9", "#CF50EA", "#FFB1FC")
+clusterCornerAxes(object = obj, clusterCol = "seurat_clusters", 
+                  aspect.ratio = 1, pSize = 0.5, nrow = 2, base_size = 20,
+                  groupFacet = "orig.ident", noSplit = F) + scale_color_manual(values = colors)
+```
+
+```{r}
+## Seurat RPCA integration
+obj.list = SplitObject(obj, split.by = "orig.ident")
+features = SelectIntegrationFeatures(obj.list)
+obj.list <- PrepSCTIntegration(obj.list, anchor.features = features)
+anchors = FindIntegrationAnchors(obj.list, normalization.method = "SCT",
+    anchor.features = features, dims = 1:50, reduction = "rpca")
+combined_rpca = IntegrateData(anchorset = anchors, normalization.method = "SCT", new.)
+```
+```{r}
+combined_rpca <- RunPCA(combined_rpca, verbose = FALS)
+combined_rpca <- RunUMAP(combined_rpca, reduction = "pca", dims = 1:50, verbose = F)
+```
+
+```{r}
+clusterCornerAxes(object = combined_rpca, clusterCol = "orig.ident", aspect.ratio = 1, pSize = 0.5, base_size = 20)  + 
+  ggsci::scale_color_bmj()
+```
+```{r}
+clusterCornerAxes(object = combined_rpca, clusterCol = "seurat_clusters", 
+                  aspect.ratio = 1, pSize = 0.5, nrow = 2, base_size = 20,
+                  groupFacet = "orig.ident", noSplit = F) + ggsci::scale_color_d3()
+```
+```{r}
+combined_rpca$old_clusters = combined_rpca$seurat_clusters
+combined_rpca = FindNeighbors(combined_rpca, dims = 1:30)
+combined_rpca = FindClusters(combined_rpca, resolution = 0.29, cluster.name = "new_clusters")
+
+clusterCornerAxes(object = combined_rpca, clusterCol = "new_clusters", 
+                  aspect.ratio = 1, pSize = 0.5, nrow = 2, base_size = 20,
+                  groupFacet = "orig.ident", noSplit = F) + ggsci::scale_color_d3()
+```
+
+
+```{r}
+## Seurat CCA integration
+anchors = FindIntegrationAnchors(obj.list, normalization.method = "SCT",
+    anchor.features = features, dims = 1:50, reduction = "cca", verbose = F)
+combined_cca = IntegrateData(anchorset = anchors, normalization.method = "SCT", verbose = F)
+combined_cca = RunPCA(combined_cca, verbose = FALSE)
+combined_cca = RunUMAP(combined_cca, reduction = "pca", dims = 1:50, verbose = FALSE)
+```
+
+```{r}
+clusterCornerAxes(object = combined_cca, clusterCol = "orig.ident", aspect.ratio = 1, pSize = 0.5, )  + 
+  ggsci::scale_color_bmj()
+```
+```{r}
+clusterCornerAxes(object = combined_cca, clusterCol = "old_clusters", 
+                  aspect.ratio = 1, pSize = 0.5, nrow = 2, base_size = 20,
+                  groupFacet = "orig.ident", noSplit = F) + ggsci::scale_color_d3()
+```
+```{r}
+combined_cca$old_clusters = combined_cca$seurat_clusters
+combined_cca = FindNeighbors(combined_cca, dims = 1:30)
+combined_cca = FindClusters(combined_cca, resolution = 0.29, cluster.name = "new_clusters")
+
+clusterCornerAxes(object = combined_cca, clusterCol = "new_clusters", 
+                  aspect.ratio = 1, pSize = 0.5, nrow = 2, base_size = 20,
+                  groupFacet = "orig.ident", noSplit = F) + ggsci::scale_color_d3()
+```
+
+
+
+```{r}
+## Harmony integration
+library(harmony)
+obj_harmony = RunHarmony(obj_harmony, "orig.ident", lambda=2)
+obj_harmony = RunUMAP(obj_harmony, reduction = "harmony", dims = 1:50, verbose = F)
+clusterCornerAxes(object = obj_harmony, clusterCol = "orig.ident", aspect.ratio = 1, pSize = 0.5, )  + 
+  ggsci::scale_color_bmj()
+```
+```{r}
+clusterCornerAxes(object = obj_harmony, clusterCol = "old_clusters", 
+                  aspect.ratio = 1, pSize = 0.5, nrow = 2, base_size = 20,
+                  groupFacet = "orig.ident", noSplit = F) + scale_color_manual(values = colors)
+```
+
+```{r}
+obj_harmony$old_clusters = obj_harmony$seurat_clusters
+obj_harmony = FindNeighbors(obj_harmony, dims = 1:30, reduction = "harmony")
+obj_harmony = FindClusters(obj_harmony, resolution = 0.43, cluster.name = "new_clusters")
+
+clusterCornerAxes(object = obj_harmony, clusterCol = "new_clusters", 
+                  aspect.ratio = 1, pSize = 0.5, nrow = 2, base_size = 20,
+                  groupFacet = "orig.ident", noSplit = F) + ggsci::scale_color_d3()
+```
+```{r}
+p1 = DimPlot(obj, reduction = "pca", pt.size = 0.5, group.by = "orig.ident", alpha = .8) + 
+  labs(title = "Before correction") + ggsci::scale_color_bmj() +
+  cowplot::theme_cowplot(font_size = 16) + NoLegend()
+p2 = DimPlot(combined_rpca, reduction = "pca", pt.size = 0.5, group.by = "orig.ident", alpha = .8) + 
+  labs(title = "RPCA correction") + ggsci::scale_color_bmj() +
+  cowplot::theme_cowplot(font_size = 16) + NoLegend()
+p3 = DimPlot(combined_cca, reduction = "pca", pt.size = 0.5, group.by = "orig.ident", alpha = .8) + 
+  labs(title = "CCA correction")  + ggsci::scale_color_bmj() +
+  cowplot::theme_cowplot(font_size = 16) + NoLegend()
+p4 = DimPlot(obj_harmony, reduction = "harmony", pt.size = 0.5, group.by = "orig.ident", alpha = .8) + 
+  labs(title = "Harmony correction") + ggsci::scale_color_bmj() +
+  cowplot::theme_cowplot(font_size = 16)
+
+wrap_plots(p1, p2, p3, p4, ncol = 2)
+```
+```{r}
+obj$orig.ident = factor(obj$orig.ident, 
+                        levels = c("c1_2", "c2_3", "c1_9", "cwb46", "HE14", "HE17", "HE50", "HE56"))
+
+Idents(obj) = "orig.ident"
+obj = RenameIdents(obj, 
+                   "c1_2" = "RR", "c2_3" = "RR", 
+                   "c1_9" = "RRKO", "cwb46" = "RRKO", 
+                   "HE14" = "NN", "HE17" = "NN", 
+                   "HE50" = "NNKO", "HE56" = "NNKO")
+obj$genotype2 = Idents(obj)
+levels(obj$genotype2) = c("RR", "RRKO", "NN", "NNKO")
+
+colors2 = c("#D54398", "#FFA3B1", "#F46B21", "#FFD030", "#307E1C", "#A4EC46", "#007B7F", "#58ECBD")
+```
+
+```{r}
+DimPlot(obj, reduction = "pca", pt.size = 0.5, group.by = "orig.ident", alpha = .8, split.by = "genotype2") + 
+  labs(title = "Before correction") + scale_color_manual(values = colors2) +
+  cowplot::theme_cowplot(font_size = 16) + coord_fixed(ratio = 1.2)
+```
+```{r}
+obj_harmony$orig.ident = factor(obj_harmony$orig.ident, 
+                        levels = c("c1_2", "c2_3", "c1_9", "cwb46", "HE14", "HE17", "HE50", "HE56"))
+
+Idents(obj_harmony) = "orig.ident"
+obj_harmony = RenameIdents(obj_harmony, 
+                   "c1_2" = "RR", "c2_3" = "RR", 
+                   "c1_9" = "RRKO", "cwb46" = "RRKO", 
+                   "HE14" = "NN", "HE17" = "NN", 
+                   "HE50" = "NNKO", "HE56" = "NNKO")
+obj_harmony$genotype2 = Idents(obj_harmony)
+levels(obj_harmony$genotype2) = c("RR", "RRKO", "NN", "NNKO")
+
+DimPlot(obj_harmony, reduction = "harmony", pt.size = 0.5, group.by = "orig.ident", alpha = .8, split.by = "genotype2") + 
+  labs(title = "Harmony correction") + scale_color_manual(values = colors2) +
+  cowplot::theme_cowplot(font_size = 16) + coord_fixed(ratio = 1.2)
+```
+```{r}
+colors3 = c("#CE2128", "#EBC42D", "#007B7C", "#9EC66D")
+cellRatioPlot(obj_harmony, sample.name = "old_clusters", celltype.name = "genotype2", 
+              fill.col = colors3, col.width = 0.9, flow.alpha = 0) + 
+  labs(x = "old clusters", y = "Proportion of cells", title = "Harmony correction") +
+  easy_x_axis_labels_size(16) + easy_y_axis_labels_size(16) + 
+  easy_title_size(18) + easy_x_axis_title_size(16) + easy_y_axis_title_size(16) +
+  easy_remove_legend_title()
+```
+```{r}
+cellRatioPlot(obj_harmony, sample.name = "genotype2", celltype.name = "new_clusters", 
+              fill.col = colors, col.width = 0.9, flow.alpha = 0) + 
+  labs(x = "", y = "Proportion of cells", title = "Harmony correction") +
+  easy_x_axis_labels_size(16) + easy_y_axis_labels_size(16) + 
+  easy_title_size(18) + easy_x_axis_title_size(16) + easy_y_axis_title_size(16) +
+  easy_remove_legend_title()
+```
+
+```{r}
+p1 = DimPlot(obj, reduction = "pca", pt.size = 0.5, 
+             group.by = "orig.ident", alpha = .8, split.by = "genotype2") + 
+  labs(title = "Before correction") + scale_color_manual(values = colors2) +
+  cowplot::theme_cowplot(font_size = 16) + NoLegend() #+ coord_fixed(ratio = 1.2) 
+p2 = DimPlot(obj_harmony, reduction = "harmony", pt.size = 0.5, 
+             group.by = "orig.ident", alpha = .8, split.by = "genotype2") + 
+  labs(title = "Harmony correction") + scale_color_manual(values = colors2) +
+  cowplot::theme_cowplot(font_size = 16) #+ coord_fixed(ratio = 1.1)
+
+wrap_plots(p1, p2, ncol = 1)
+```
+```{r}
+p1 = DimPlot(obj, reduction = "pca", pt.size = 0.5, 
+             group.by = "orig.ident", alpha = .8) + 
+  labs(title = "Before correction") + scale_color_manual(values = colors2) +
+  cowplot::theme_cowplot(font_size = 16) + NoLegend() #+ coord_fixed(ratio = 1.2) 
+p2 = DimPlot(obj_harmony, reduction = "harmony", pt.size = 0.5, 
+             group.by = "orig.ident", alpha = .8) + 
+  labs(title = "Harmony correction") + scale_color_manual(values = colors2) +
+  cowplot::theme_cowplot(font_size = 16) #+ coord_fixed(ratio = 1.1)
+
+p3 = DimPlot(obj, reduction = "pca", pt.size = 0.5, 
+             group.by = "genotype2", alpha = .8) + 
+  labs(title = "Before correction") + scale_color_manual(values = colors2) +
+  cowplot::theme_cowplot(font_size = 16) + NoLegend() #+ coord_fixed(ratio = 1.2) 
+p4 = DimPlot(obj_harmony, reduction = "harmony", pt.size = 0.5, 
+             group.by = "genotype2", alpha = .8) + 
+  labs(title = "Harmony correction") + scale_color_manual(values = colors2) +
+  cowplot::theme_cowplot(font_size = 16) #+ coord_fixed(ratio = 1.1)
+wrap_plots(p1, p2, p3, p4, ncol = 2)
+```
+
+```{r}
+featureCornerAxes(obj_harmony, reduction = "umap", 
+                  features = c("LIMCH1", "CRABP1"), pSize = 0.5, 
+                  high = "blue", maxExp = 6, minExp = 0, aspect.ratio = 1,
+                  groupFacet = NULL)
+```
+```{r}
+VlnPlot(obj_harmony, features = c("LIMCH1"), group.by = "genotype2", log = T, cols = colors3) +
+  cowplot::theme_cowplot(font_size = 18) & #scale_color_manual(values = colors) +
+  labs(x = "", y = "Total counts per cell", title = "") & NoLegend() 
+```
+
+
+```{r}
+VlnPlot(obj, features = "nCount_RNA", group.by = "orig.ident", log = T, cols = colors2) +
+  cowplot::theme_cowplot(font_size = 18) + #scale_color_manual(values = colors) +
+  labs(x = "", y = "Total counts per cell", title = "") + NoLegend() 
+``` 
+
+
+```{r}
+pseudobulk = AggregateExpression(obj, assays = "RNA", group.by = "orig.ident") 
+
+pseudobulk_long = pseudobulk$RNA %>% as_tibble(rownames = "symbol") |>
+  pivot_longer(cols = 2:9, names_to = "sample", values_to = "pseudobulk")
+
+pseudobulk_long$sample = factor(pseudobulk_long$sample, 
+                                levels = c("c1-2", "c2-3", "c1-9", "cwb46", "HE14", "HE17", "HE50", "HE56"), 
+                                ordered = T)
+
+ggplot(pseudobulk_long, aes(x = sample, y = log10(pseudobulk + 1), fill = sample)) +
+  geom_violin(scale = "width") + geom_jitter(size = 0.1, alpha = 0.2) +
+  cowplot::theme_cowplot(font_size = 18) + scale_fill_manual(values = colors2) +
+  labs(x = "", y = "Pseudobulk counts per gene (log10)", title = "") + NoLegend()
+```
+```{r}
+sampleDists = dist(t(pseudobulk$RNA))
+
+sampleDistMatrix = as.matrix(sampleDists)
+colors = colorRampPalette( rev(RColorBrewer::brewer.pal(9, "Blues")) )(255)
+pheatmap::pheatmap(sampleDistMatrix,
+         #clustering_distance_rows=sampleDists,
+         #clustering_distance_cols=sampleDists,
+         col=colors) 
+```
+
+```{r}
+library(corrplot)
+
+M = cor(as.matrix(pseudobulk$RNA), method = "pearson")
+#testRes = cor.mtest(as.matrix(pseudobulk$RNA), conf.level = 0.95)
+corrplot(M, is.corr = F, col = COL2('PRGn'), tl.cex = 1.2, tl.col = "black", order = "original")
+```
+
+```{r}
+M = cor(as.matrix(pseudobulk$RNA), method = "spearman")
+corrplot(M, is.corr = F, col = COL2('PRGn'), tl.cex = 1.2, tl.col = "black", 
+         order = "original", col.lim = c(0.89, 1))
+```
+```{r}
+library(ggfortify)
+standardized_data <- scale(pseudobulk$RNA)
+pca_res = prcomp(t(standardized_data), scale. = TRUE)
+p = autoplot(pca_res, label = TRUE)
+data = p$data[, 1:2]
+data$sample = rownames(data)
+names(colors2) = rownames(data)
+ggplot(data, aes(x = PC1, y = PC2, label = sample, color = sample)) +
+  geom_point(size =  3) + ggrepel::geom_text_repel(size = 6) +
+  xlim(-0.6, 0.6) + ylim(-0.6, 0.6) +
+  labs(x = p$labels$x, y = p$labels$y) + scale_color_manual(values = colors2) +
+  cowplot::theme_cowplot(font_size = 16)  + NoLegend()
+```
+
+```{r}
+qs::qsave(combined_cca, "data/combined_cca.qs")
+qs::qsave(combined_rpca, "data/combined_rpca.qs")
+qs::qsave(obj_harmony, "data/combined_harmony.qs")
+
+obj_harmony = qs::qread("data/combined_harmony.qs")
+```
+
